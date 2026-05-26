@@ -28,11 +28,12 @@ from storage import save_digest
 def run_digest(config: Config, workspace_id: str | None = None) -> None:
     fetcher = SlackFetcher(config.slack_bot_token)
 
-    print("Resolving channel names...")
+    print(f"Resolving channel names for: {config.channels}")
     channel_map = fetcher.get_channel_ids(config.channels)
+    print(f"  Resolved: {list(channel_map.keys())}")
     missing = set(config.channels) - set(channel_map)
     if missing:
-        print(f"  Warning: channels not found (bot may not be invited): {', '.join(missing)}", file=sys.stderr)
+        print(f"  Warning: channels not found: {', '.join(missing)}")
 
     if not channel_map:
         print("No accessible channels found. Aborting.", file=sys.stderr)
