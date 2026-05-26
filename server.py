@@ -43,22 +43,17 @@ def run():
         return jsonify({"error": "A digest is already running"}), 409
 
     _running = True
-
-    def do_run():
-        global _running
-        try:
-            config = Config.from_db(workspace_id) if workspace_id else Config()
-            run_digest(config, workspace_id)
-        except Exception as exc:
-            import traceback
-            print(f"Digest error: {exc}", flush=True)
-            traceback.print_exc()
-        finally:
-            _running = False
-            _lock.release()
-
-    threading.Thread(target=do_run, daemon=True).start()
-    return jsonify({"ok": True, "message": "Digest started"})
+    try:
+        config = Config.from_db(workspace_id) if workspace_id else Config()
+        run_digest(config, workspace_id)
+        return jsonify({"ok": True})
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(exc)}), 500
+    finally:
+        _running = False
+        _lock.release()
 
 
 if __name__ == "__main__":
