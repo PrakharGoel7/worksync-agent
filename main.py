@@ -39,10 +39,10 @@ def run_digest(config: Config, workspace_id: str | None = None) -> None:
         print("No accessible channels found. Aborting.", file=sys.stderr)
         return
 
-    print(f"Fetching messages from {len(channel_map)} channel(s) (last {config.lookback_days} days)...")
+    print(f"Fetching messages from {len(channel_map)} channel(s) (last {config.backfill_days} days)...")
     channel_data: dict[str, list[dict]] = {}
     for name, ch_id in channel_map.items():
-        msgs = fetcher.fetch_channel(ch_id, config.lookback_days)
+        msgs = fetcher.fetch_channel(ch_id, config.backfill_days)
         channel_data[name] = msgs
         print(f"  #{name}: {len(msgs)} messages")
 
@@ -54,12 +54,12 @@ def run_digest(config: Config, workspace_id: str | None = None) -> None:
     print(f"Analyzing {total} messages with Claude ({config.model})...")
     digest = analyze(config.openrouter_api_key, channel_data, config.model)
 
-    digest_id = save_digest(digest, config.lookback_days, total, workspace_id)
+    digest_id = save_digest(digest, config.backfill_days, total, workspace_id)
     print(f"Digest saved to database (id={digest_id})")
 
     print("Sending digest to manager...")
     slack_client = WebClient(token=config.slack_bot_token)
-    blocks = build_blocks(digest, config.lookback_days)
+    blocks = build_blocks(digest, config.backfill_days)
     send_digest(slack_client, config.manager_slack_id, blocks)
     print("Done.")
 

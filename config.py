@@ -9,7 +9,7 @@ class Config:
         self.channels: list[str] = [
             c.strip() for c in os.environ.get("SLACK_CHANNELS", "").split(",") if c.strip()
         ]
-        self.lookback_days: int = int(os.environ.get("LOOKBACK_DAYS", "7"))
+        self.backfill_days: int = int(os.environ.get("BACKFILL_DAYS", os.environ.get("LOOKBACK_DAYS", "30")))
         self.model: str = os.environ.get("CLAUDE_MODEL", "anthropic/claude-sonnet-4-5")
 
         if not self.channels:
@@ -28,7 +28,8 @@ class Config:
         cfg.openrouter_api_key = os.environ.get("OPENROUTER_API_KEY", "")
         cfg.manager_slack_id = data["manager_slack_id"]
         cfg.channels = data["channels"]
-        cfg.lookback_days = data["lookback_days"]
+        cfg.backfill_days = data.get("backfill_days") or data.get("lookback_days") or 30
+        cfg.schedule_interval = data.get("schedule_interval", "weekly")
         cfg.model = data.get("model") or os.environ.get("CLAUDE_MODEL", "anthropic/claude-sonnet-4-5")
 
         if not cfg.channels:

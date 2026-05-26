@@ -19,15 +19,18 @@ def init_db() -> None:
     conn = _conn()
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS workspaces (
-            id               TEXT PRIMARY KEY,
-            team_name        TEXT NOT NULL,
-            bot_token        TEXT NOT NULL,
-            authed_user_id   TEXT DEFAULT '',
-            channels         TEXT DEFAULT '[]',
-            manager_slack_id TEXT DEFAULT '',
-            lookback_days    INTEGER DEFAULT 7,
-            model            TEXT DEFAULT 'anthropic/claude-sonnet-4-5',
-            created_at       TEXT DEFAULT CURRENT_TIMESTAMP
+            id                TEXT PRIMARY KEY,
+            team_name         TEXT NOT NULL,
+            bot_token         TEXT NOT NULL,
+            authed_user_id    TEXT DEFAULT '',
+            channels          TEXT DEFAULT '[]',
+            manager_slack_id  TEXT DEFAULT '',
+            lookback_days     INTEGER DEFAULT 7,
+            backfill_days     INTEGER DEFAULT 30,
+            schedule_interval TEXT DEFAULT 'weekly',
+            last_run_at       TEXT DEFAULT NULL,
+            model             TEXT DEFAULT 'anthropic/claude-sonnet-4-5',
+            created_at        TEXT DEFAULT CURRENT_TIMESTAMP
         );
         CREATE TABLE IF NOT EXISTS digests (
             id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,6 +74,16 @@ def init_db() -> None:
             channel   TEXT DEFAULT ''
         );
     """)
+    # Migrate existing tables to add new columns if missing
+    for alter in [
+        "ALTER TABLE workspaces ADD COLUMN backfill_days INTEGER DEFAULT 30",
+        "ALTER TABLE workspaces ADD COLUMN schedule_interval TEXT DEFAULT 'weekly'",
+        "ALTER TABLE workspaces ADD COLUMN last_run_at TEXT DEFAULT NULL",
+    ]:
+        try:
+            conn.execute(alter)
+        except Exception:
+            pass
     conn.commit()
 
 
@@ -90,7 +103,10 @@ def load_workspace_config(workspace_id: str) -> dict | None:
         "authed_user_id": r["authed_user_id"],
         "channels": json.loads(r["channels"] or "[]"),
         "manager_slack_id": r["manager_slack_id"],
-        "lookback_days": r["lookback_days"],
+        "lookback_days": r.get("lookback_days", 7),
+        "backfill_days": r.get("backfill_days") or r.get("lookback_days") or 30,
+        "schedule_interval": r.get("schedule_interval") or "weekly",
+        "last_run_at": r.get("last_run_at"),
         "model": r["model"],
     }
 
@@ -159,3 +175,32 @@ def save_digest(digest: dict, lookback_days: int, total_messages: int, workspace
 
     conn.commit()
     return did
+
+
+def get_all_workspaces() -> list[dict]:
+    init_db()
+    conn = _conn()
+    cur = conn.execute(
+        "SELECT id, channels, manager_slack_id, schedule_interval, last_run_at FROM workspaces"
+    )
+    cols = [d[0] for d in cur.description]
+    results = []
+    for row in cur.fetchall():
+        r = dict(zip(cols, row))
+        channels = json.loads(r.get("channels") or "[]")
+        if channels and r.get("manager_slack_id"):
+            results.append({
+                "id": r["id"],
+                "schedule_interval": r.get("schedule_interval") or "weekly",
+                "last_run_at": r.get("last_run_at"),
+            })
+    return results
+
+
+def update_last_run_at(workspace_id: str) -> None:
+    from datetime import datetime, timezone
+    init_db()
+    conn = _conn()
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute("UPDATE workspaces SET last_run_at=? WHERE id=?", (now, workspace_id))
+    conn.commit()
