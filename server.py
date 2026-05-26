@@ -40,7 +40,9 @@ def run():
             config = Config.from_db(workspace_id) if workspace_id else Config()
             run_digest(config, workspace_id)
         except Exception as exc:
+            import traceback
             print(f"Digest error: {exc}", flush=True)
+            traceback.print_exc()
         finally:
             _lock.release()
 

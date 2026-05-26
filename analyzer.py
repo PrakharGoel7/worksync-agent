@@ -126,6 +126,7 @@ def analyze(api_key: str, channel_data: dict[str, list[dict]], model: str) -> di
     client = OpenAI(
         api_key=api_key,
         base_url="https://openrouter.ai/api/v1",
+        timeout=120.0,
     )
 
     response = client.chat.completions.create(
