@@ -96,10 +96,11 @@ _TOOL = {
                     "type": "array",
                     "items": {
                         "type": "object",
-                        "required": ["decision", "channel"],
+                        "required": ["decision", "channel", "date"],
                         "properties": {
                             "decision": {"type": "string"},
                             "channel":  {"type": "string"},
+                            "date":     {"type": "string", "description": "YYYY-MM-DD of the message where the decision was made"},
                         },
                     },
                 },

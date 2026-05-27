@@ -68,10 +68,11 @@ def init_db() -> None:
             message_date TEXT
         );
         CREATE TABLE IF NOT EXISTS decisions (
-            id        INTEGER PRIMARY KEY AUTOINCREMENT,
-            digest_id INTEGER REFERENCES digests(id),
-            decision  TEXT,
-            channel   TEXT DEFAULT ''
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            digest_id     INTEGER REFERENCES digests(id),
+            decision      TEXT,
+            channel       TEXT DEFAULT '',
+            decision_date TEXT DEFAULT NULL
         );
     """)
     # Migrate existing tables to add new columns if missing
@@ -79,6 +80,7 @@ def init_db() -> None:
         "ALTER TABLE workspaces ADD COLUMN backfill_days INTEGER DEFAULT 30",
         "ALTER TABLE workspaces ADD COLUMN schedule_interval TEXT DEFAULT 'weekly'",
         "ALTER TABLE workspaces ADD COLUMN last_run_at TEXT DEFAULT NULL",
+        "ALTER TABLE decisions ADD COLUMN decision_date TEXT DEFAULT NULL",
     ]:
         try:
             conn.execute(alter)
@@ -167,8 +169,8 @@ def save_digest(digest: dict, lookback_days: int, total_messages: int, workspace
         if not existing:
             if isinstance(d, dict):
                 conn.execute(
-                    "INSERT INTO decisions (digest_id, decision, channel) VALUES (?,?,?)",
-                    (did, d["decision"], d.get("channel", "")),
+                    "INSERT INTO decisions (digest_id, decision, channel, decision_date) VALUES (?,?,?,?)",
+                    (did, d["decision"], d.get("channel", ""), d.get("date")),
                 )
             else:
                 conn.execute("INSERT INTO decisions (digest_id, decision) VALUES (?,?)", (did, d))
