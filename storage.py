@@ -78,11 +78,29 @@ def init_db() -> None:
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
             workspace_id TEXT NOT NULL DEFAULT '',
             person       TEXT NOT NULL,
+            channel      TEXT NOT NULL DEFAULT '',
             message_date TEXT NOT NULL,
             count        INTEGER NOT NULL DEFAULT 0,
-            UNIQUE(workspace_id, person, message_date)
+            UNIQUE(workspace_id, person, channel, message_date)
         );
     """)
+    # Migrate message_counts to add channel column if missing (recreate since constraint changes)
+    try:
+        conn.execute("SELECT channel FROM message_counts LIMIT 0")
+    except Exception:
+        conn.execute("DROP TABLE IF EXISTS message_counts")
+        conn.execute("""
+            CREATE TABLE message_counts (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id TEXT NOT NULL DEFAULT '',
+                person       TEXT NOT NULL,
+                channel      TEXT NOT NULL DEFAULT '',
+                message_date TEXT NOT NULL,
+                count        INTEGER NOT NULL DEFAULT 0,
+                UNIQUE(workspace_id, person, channel, message_date)
+            )
+        """)
+
     # Migrate existing tables to add new columns if missing
     for alter in [
         "ALTER TABLE workspaces ADD COLUMN backfill_days INTEGER DEFAULT 30",
@@ -226,21 +244,21 @@ def save_message_counts(channel_data: dict, workspace_id: str | None = None) -> 
     init_db()
     conn = _conn()
     wid = workspace_id or ''
-    counts: dict[tuple[str, str], int] = defaultdict(int)
-    for msgs in channel_data.values():
+    counts: dict[tuple[str, str, str], int] = defaultdict(int)
+    for channel_name, msgs in channel_data.items():
         for msg in msgs:
             person = msg.get('user', 'unknown')
             date = datetime.fromtimestamp(float(msg['ts'])).strftime('%Y-%m-%d')
-            counts[(person, date)] += 1
+            counts[(person, channel_name, date)] += 1
             for reply in msg.get('replies', []):
                 rp = reply.get('user', 'unknown')
                 rd = datetime.fromtimestamp(float(reply['ts'])).strftime('%Y-%m-%d') if reply.get('ts') else date
-                counts[(rp, rd)] += 1
-    for (person, date), count in counts.items():
+                counts[(rp, channel_name, rd)] += 1
+    for (person, channel, date), count in counts.items():
         conn.execute(
-            """INSERT INTO message_counts (workspace_id, person, message_date, count)
-               VALUES (?, ?, ?, ?)
-               ON CONFLICT(workspace_id, person, message_date) DO UPDATE SET count = excluded.count""",
-            (wid, person, date, count),
+            """INSERT INTO message_counts (workspace_id, person, channel, message_date, count)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(workspace_id, person, channel, message_date) DO UPDATE SET count = excluded.count""",
+            (wid, person, channel, date, count),
         )
     conn.commit()
