@@ -9,7 +9,7 @@ You must call the `create_digest` function with:
 - contributions: list of {person, item, date} — date is YYYY-MM-DD of when the message was sent
 - blockers: issues preventing progress, who is affected, and which channel it appeared in. If multiple messages refer to the same underlying issue, create only ONE blocker entry for it — use the date of the first mention. Do not create separate entries for follow-ups or repeated mentions of the same problem.
 - decisions: key decisions made or still pending
-- period_summary: 2–3 sentence plain-English overview of what the team did this period
+- period_summary: 4–6 short, self-contained bullet insights (each under 15 words) — highlight what moved, what's stuck, and what was decided
 
 Attribute everything to the person who said or committed to it. If no one is clearly assigned, mark owner as "unassigned".
 
@@ -104,7 +104,11 @@ _TOOL = {
                         },
                     },
                 },
-                "period_summary": {"type": "string"},
+                "period_summary": {
+                    "type": "array",
+                    "description": "4–6 short bullet insights about this period, each under 15 words",
+                    "items": {"type": "string"},
+                },
             },
         },
     },
@@ -115,7 +119,7 @@ _EMPTY_DIGEST = {
     "contributions": [],
     "blockers": [],
     "decisions": [],
-    "period_summary": "No messages found in the monitored channels for this period.",
+    "period_summary": ["No messages found in the monitored channels for this period."],
 }
 
 

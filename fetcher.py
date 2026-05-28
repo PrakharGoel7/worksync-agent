@@ -97,6 +97,7 @@ class SlackFetcher:
                 {
                     "user": self.resolve_user(m.get("user", "unknown")),
                     "text": m.get("text", ""),
+                    "ts": m.get("ts", thread_ts),
                 }
                 for m in resp.get("messages", [])[1:]  # skip parent
             ]

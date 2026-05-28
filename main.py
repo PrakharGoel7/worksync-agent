@@ -22,7 +22,7 @@ from config import Config
 from fetcher import SlackFetcher
 from analyzer import analyze
 from reporter import build_blocks, send_digest
-from storage import save_digest
+from storage import save_digest, save_message_counts
 
 
 def run_digest(config: Config, workspace_id: str | None = None) -> None:
@@ -54,6 +54,7 @@ def run_digest(config: Config, workspace_id: str | None = None) -> None:
     print(f"Analyzing {total} messages with Claude ({config.model})...")
     digest = analyze(config.openrouter_api_key, channel_data, config.model)
 
+    save_message_counts(channel_data, workspace_id)
     digest_id = save_digest(digest, config.backfill_days, total, workspace_id)
     print(f"Digest saved to database (id={digest_id})")
 

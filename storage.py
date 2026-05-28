@@ -74,6 +74,14 @@ def init_db() -> None:
             channel       TEXT DEFAULT '',
             decision_date TEXT DEFAULT NULL
         );
+        CREATE TABLE IF NOT EXISTS message_counts (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            workspace_id TEXT NOT NULL DEFAULT '',
+            person       TEXT NOT NULL,
+            message_date TEXT NOT NULL,
+            count        INTEGER NOT NULL DEFAULT 0,
+            UNIQUE(workspace_id, person, message_date)
+        );
     """)
     # Migrate existing tables to add new columns if missing
     for alter in [
@@ -117,9 +125,13 @@ def save_digest(digest: dict, lookback_days: int, total_messages: int, workspace
     init_db()
     conn = _conn()
 
+    period_summary = digest.get("period_summary", "")
+    if isinstance(period_summary, list):
+        period_summary = json.dumps(period_summary)
+
     cur = conn.execute(
         "INSERT INTO digests (lookback_days, period_summary, total_messages, raw_json, workspace_id) VALUES (?,?,?,?,?)",
-        (lookback_days, digest.get("period_summary", ""), total_messages, json.dumps(digest), workspace_id),
+        (lookback_days, period_summary, total_messages, json.dumps(digest), workspace_id),
     )
     conn.commit()
     did = cur.lastrowid
@@ -205,4 +217,30 @@ def update_last_run_at(workspace_id: str) -> None:
     conn = _conn()
     now = datetime.now(timezone.utc).isoformat()
     conn.execute("UPDATE workspaces SET last_run_at=? WHERE id=?", (now, workspace_id))
+    conn.commit()
+
+
+def save_message_counts(channel_data: dict, workspace_id: str | None = None) -> None:
+    from datetime import datetime
+    from collections import defaultdict
+    init_db()
+    conn = _conn()
+    wid = workspace_id or ''
+    counts: dict[tuple[str, str], int] = defaultdict(int)
+    for msgs in channel_data.values():
+        for msg in msgs:
+            person = msg.get('user', 'unknown')
+            date = datetime.fromtimestamp(float(msg['ts'])).strftime('%Y-%m-%d')
+            counts[(person, date)] += 1
+            for reply in msg.get('replies', []):
+                rp = reply.get('user', 'unknown')
+                rd = datetime.fromtimestamp(float(reply['ts'])).strftime('%Y-%m-%d') if reply.get('ts') else date
+                counts[(rp, rd)] += 1
+    for (person, date), count in counts.items():
+        conn.execute(
+            """INSERT INTO message_counts (workspace_id, person, message_date, count)
+               VALUES (?, ?, ?, ?)
+               ON CONFLICT(workspace_id, person, message_date) DO UPDATE SET count = excluded.count""",
+            (wid, person, date, count),
+        )
     conn.commit()
