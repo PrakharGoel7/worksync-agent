@@ -61,6 +61,7 @@ const ChartTip = ({ active, payload, label }: any) => {
 
 export default function ContributionsPage() {
   const [data, setData] = useState<ContribData | null>(null)
+  const [githubStats, setGithubStats] = useState<Record<string, { prs: number; additions: number; deletions: number; changedFiles: number }> | null>(null)
   const [loading, setLoading] = useState(true)
   const [timeRange, setTimeRange] = useState<TimeRange>('all')
   const [channel, setChannel] = useState<string>('all')
@@ -75,6 +76,10 @@ export default function ContributionsPage() {
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false) })
   }, [channel])
+
+  useEffect(() => {
+    fetch('/api/github/data').then(r => r.json()).then(d => setGithubStats(d.memberStats ?? null)).catch(() => {})
+  }, [])
 
   const { topPeople, chartData } = useMemo(() => {
     if (!data) return { topPeople: [] as string[], chartData: [] as Array<Record<string, string | number>> }
@@ -427,11 +432,36 @@ export default function ContributionsPage() {
                               </div>
                             )}
 
-                            {detail.actionItems.length === 0 && detail.blockers.length === 0 && detail.byWeek.length <= 1 && (
+                            {detail.actionItems.length === 0 && detail.blockers.length === 0 && detail.byWeek.length <= 1 && !githubStats?.[c.name] && (
                               <div style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'var(--font-jakarta)' }}>
                                 No open work items or activity history to show.
                               </div>
                             )}
+
+                            {githubStats?.[c.name] && (() => {
+                              const gs = githubStats[c.name]
+                              return (
+                                <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+                                  <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', marginBottom: 10 }}>GitHub activity</div>
+                                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                                    {[
+                                      { label: 'PRs', value: gs.prs, color: 'var(--blue)' },
+                                      { label: 'lines added', value: `+${gs.additions.toLocaleString()}`, color: 'var(--green)' },
+                                      { label: 'lines removed', value: `−${gs.deletions.toLocaleString()}`, color: 'var(--red)' },
+                                      { label: 'files changed', value: gs.changedFiles, color: 'var(--text-muted)' },
+                                    ].map(s => (
+                                      <div key={s.label} style={{
+                                        padding: '8px 12px', background: 'var(--surface)',
+                                        border: '1px solid var(--border)', borderRadius: 6, flex: '1 1 80px',
+                                      }}>
+                                        <div style={{ fontSize: 16, fontWeight: 700, color: s.color, fontFamily: 'var(--font-mono)' }}>{s.value}</div>
+                                        <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 2, fontFamily: 'var(--font-mono)' }}>{s.label}</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )
+                            })()}
                           </div>
                         </motion.div>
                       )}

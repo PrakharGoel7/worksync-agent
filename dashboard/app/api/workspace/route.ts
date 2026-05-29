@@ -17,6 +17,8 @@ export async function GET() {
     backfillDays: ws.backfillDays,
     scheduleInterval: ws.scheduleInterval,
     model: ws.model,
+    githubRepos: ws.githubRepos ?? '',
+    githubConnected: !!ws.githubToken,
   })
 }
 
@@ -25,13 +27,15 @@ export async function PATCH(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const update: { channels?: string[]; managerSlackId?: string; backfillDays?: number; scheduleInterval?: string; model?: string } = {}
+  const update: { channels?: string[]; managerSlackId?: string; backfillDays?: number; scheduleInterval?: string; model?: string; githubToken?: string | null; githubRepos?: string | null } = {}
 
   if (Array.isArray(body.channels)) update.channels = body.channels
   if (typeof body.managerSlackId === 'string') update.managerSlackId = body.managerSlackId
   if (typeof body.backfillDays === 'number') update.backfillDays = body.backfillDays
   if (typeof body.scheduleInterval === 'string') update.scheduleInterval = body.scheduleInterval
   if (typeof body.model === 'string') update.model = body.model
+  if ('githubToken' in body) update.githubToken = body.githubToken || null
+  if ('githubRepos' in body) update.githubRepos = body.githubRepos || null
 
   await updateWorkspaceConfig(session.workspaceId, update)
   return NextResponse.json({ ok: true })

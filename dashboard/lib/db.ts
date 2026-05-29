@@ -18,6 +18,8 @@ export interface Workspace {
   lastRunAt: string | null
   model: string
   createdAt: string
+  githubToken: string | null
+  githubRepos: string | null
 }
 
 // Run once at module load — all exported functions await this
@@ -117,6 +119,8 @@ const initPromise: Promise<void> = (async () => {
     `ALTER TABLE decisions ADD COLUMN read INTEGER DEFAULT 0`,
     `ALTER TABLE decisions ADD COLUMN decision_date TEXT DEFAULT NULL`,
     `ALTER TABLE folders ADD COLUMN color TEXT DEFAULT '#f59e0b'`,
+    `ALTER TABLE workspaces ADD COLUMN github_token TEXT DEFAULT NULL`,
+    `ALTER TABLE workspaces ADD COLUMN github_repos TEXT DEFAULT NULL`,
   ]) {
     try { await client.execute({ sql, args: [] }) } catch { /* already exists */ }
   }
@@ -152,6 +156,8 @@ export async function getWorkspace(id: string): Promise<Workspace | null> {
     lastRunAt: r.last_run_at ?? null,
     model: r.model,
     createdAt: r.created_at,
+    githubToken: r.github_token ?? null,
+    githubRepos: r.github_repos ?? null,
   }
 }
 
@@ -171,7 +177,7 @@ export async function saveWorkspace(w: {
 }
 
 export async function updateWorkspaceConfig(id: string, data: {
-  channels?: string[]; managerSlackId?: string; backfillDays?: number; scheduleInterval?: string; lastRunAt?: string; model?: string
+  channels?: string[]; managerSlackId?: string; backfillDays?: number; scheduleInterval?: string; lastRunAt?: string; model?: string; githubToken?: string | null; githubRepos?: string | null
 }) {
   await initPromise
   const fields: string[] = []
@@ -182,6 +188,8 @@ export async function updateWorkspaceConfig(id: string, data: {
   if (data.scheduleInterval !== undefined) { fields.push('schedule_interval = ?'); vals.push(data.scheduleInterval) }
   if (data.lastRunAt !== undefined) { fields.push('last_run_at = ?'); vals.push(data.lastRunAt) }
   if (data.model !== undefined) { fields.push('model = ?'); vals.push(data.model) }
+  if (data.githubToken !== undefined) { fields.push('github_token = ?'); vals.push(data.githubToken) }
+  if (data.githubRepos !== undefined) { fields.push('github_repos = ?'); vals.push(data.githubRepos) }
   if (!fields.length) return
   vals.push(id)
   await client.execute({ sql: `UPDATE workspaces SET ${fields.join(', ')} WHERE id = ?`, args: vals })

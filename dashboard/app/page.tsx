@@ -7,6 +7,8 @@ import ContributionChart from '@/components/ContributionChart'
 import ActionItemsTable from '@/components/ActionItemsTable'
 import BlockersFeed from '@/components/BlockersFeed'
 import DecisionsLog from '@/components/DecisionsLog'
+import RecentPRsFeed from '@/components/RecentPRsFeed'
+import type { GithubData } from '@/lib/github'
 
 export interface DashboardData {
   stats: {
@@ -58,6 +60,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
   const [channel, setChannel] = useState<string>('all')
+  const [githubData, setGithubData] = useState<GithubData | null>(null)
 
   useEffect(() => {
     fetch('/api/workspace').then(r => r.json()).then(d => {
@@ -112,6 +115,10 @@ export default function Dashboard() {
   }
 
   useEffect(() => { fetchData(channel) }, [fetchData, channel])
+
+  useEffect(() => {
+    fetch('/api/github/data').then(r => r.json()).then(setGithubData).catch(() => {})
+  }, [])
 
   const channels = data?.channels ?? []
 
@@ -208,6 +215,9 @@ export default function Dashboard() {
             }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <BlockersFeed blockers={data.blockers} />
+                {githubData && (
+                  <RecentPRsFeed prs={githubData.recentPRs} connected={githubData.connected} />
+                )}
                 <ActionItemsTable
                   items={data.actionItems}
                   owners={data.actionItemOwners ?? []}
@@ -216,7 +226,10 @@ export default function Dashboard() {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <ContributionChart data={data.contributionsByDigest} />
+                <ContributionChart
+                  data={data.contributionsByDigest}
+                  linesData={githubData?.linesPerWeek}
+                />
                 <DecisionsLog decisions={data.decisions} />
               </div>
             </div>

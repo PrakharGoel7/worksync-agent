@@ -1,12 +1,12 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Check, ChevronDown, X } from 'lucide-react'
+import { Check, ChevronDown, X, GitBranch } from 'lucide-react'
 
 interface Channel { id: string; name: string }
 interface Member { id: string; name: string }
 
-type Step = 'channels' | 'manager' | 'schedule'
+type Step = 'channels' | 'manager' | 'schedule' | 'github'
 
 export default function OnboardingPage() {
   const router = useRouter()
@@ -24,6 +24,8 @@ export default function OnboardingPage() {
   const [saving, setSaving] = useState(false)
   const [workspaceName, setWorkspaceName] = useState('')
   const [pendingChannelNames, setPendingChannelNames] = useState<string[]>([])
+  const [githubToken, setGithubToken] = useState('')
+  const [githubRepos, setGithubRepos] = useState('')
 
   useEffect(() => {
     fetch('/api/workspace').then(r => r.json()).then(d => {
@@ -75,6 +77,8 @@ export default function OnboardingPage() {
         managerSlackId: manager?.id ?? '',
         backfillDays,
         scheduleInterval,
+        githubToken: githubToken || null,
+        githubRepos: githubRepos || null,
       }),
     })
     router.push('/')
@@ -84,6 +88,7 @@ export default function OnboardingPage() {
     { key: 'channels', label: 'Channels' },
     { key: 'manager', label: 'Manager' },
     { key: 'schedule', label: 'Schedule' },
+    { key: 'github', label: 'GitHub' },
   ] as const
 
   return (
@@ -396,6 +401,86 @@ export default function OnboardingPage() {
                 ← Back
               </button>
               <button
+                onClick={() => setStep('github')}
+                style={{
+                  padding: '11px 28px', borderRadius: 8, border: 'none',
+                  background: 'var(--text)', color: 'var(--bg)',
+                  fontSize: 14, fontFamily: 'var(--font-jakarta)', fontWeight: 600,
+                  cursor: 'pointer', transition: 'all 0.15s',
+                }}
+              >
+                Continue →
+              </button>
+            </div>
+          </div>
+        )}
+        {/* Step: GitHub */}
+        {step === 'github' && (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <GitBranch size={20} style={{ color: 'var(--text)' }} />
+              <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: 22, fontWeight: 700, color: 'var(--text)', margin: 0 }}>
+                Connect GitHub
+              </h2>
+              <span style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '2px 8px' }}>
+                optional
+              </span>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', fontFamily: 'var(--font-jakarta)', marginBottom: 28, lineHeight: 1.6 }}>
+              Surface PR status, lines changed, and code review health alongside your Slack data. You can skip this and connect later in Settings.
+            </p>
+
+            <label style={{ display: 'block', fontSize: 12, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Personal access token
+            </label>
+            <input
+              type="password"
+              value={githubToken}
+              onChange={e => setGithubToken(e.target.value)}
+              placeholder="github_pat_…"
+              style={{
+                width: '100%', padding: '10px 14px', boxSizing: 'border-box',
+                border: '1px solid var(--border)', borderRadius: 8, marginBottom: 6,
+                background: 'var(--surface)', color: 'var(--text)',
+                fontSize: 13, fontFamily: 'var(--font-mono)', outline: 'none',
+              }}
+            />
+            <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', marginBottom: 20 }}>
+              Generate at GitHub → Settings → Developer settings → Personal access tokens. Needs Pull requests: read.
+            </div>
+
+            <label style={{ display: 'block', fontSize: 12, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Repositories
+            </label>
+            <input
+              type="text"
+              value={githubRepos}
+              onChange={e => setGithubRepos(e.target.value)}
+              placeholder="owner/repo, owner/repo2"
+              style={{
+                width: '100%', padding: '10px 14px', boxSizing: 'border-box',
+                border: '1px solid var(--border)', borderRadius: 8, marginBottom: 6,
+                background: 'var(--surface)', color: 'var(--text)',
+                fontSize: 13, fontFamily: 'var(--font-mono)', outline: 'none',
+              }}
+            />
+            <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', marginBottom: 32 }}>
+              Comma-separated list of repositories to monitor.
+            </div>
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={() => setStep('schedule')}
+                style={{
+                  padding: '11px 20px', borderRadius: 8,
+                  border: '1px solid var(--border)', background: 'transparent',
+                  color: 'var(--text-muted)', fontSize: 14, fontFamily: 'var(--font-jakarta)',
+                  cursor: 'pointer',
+                }}
+              >
+                ← Back
+              </button>
+              <button
                 onClick={finish}
                 disabled={saving}
                 style={{
@@ -408,6 +493,19 @@ export default function OnboardingPage() {
               >
                 {saving ? 'Saving…' : 'Go to dashboard →'}
               </button>
+              {!saving && (
+                <button
+                  onClick={finish}
+                  style={{
+                    padding: '11px 20px', borderRadius: 8,
+                    border: '1px solid var(--border)', background: 'transparent',
+                    color: 'var(--text-dim)', fontSize: 14, fontFamily: 'var(--font-jakarta)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Skip for now
+                </button>
+              )}
             </div>
           </div>
         )}
