@@ -4,7 +4,7 @@ import { jwtVerify } from 'jose'
 const secret = () =>
   new TextEncoder().encode(process.env.SESSION_SECRET ?? 'dev-secret-min-32-chars-change-me!!')
 
-const PUBLIC = ['/login', '/api/auth/']
+const PUBLIC = ['/login', '/api/auth/', '/github', '/api/github/']
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
