@@ -1,0 +1,25 @@
+display_information:
+  name: Digest Agent
+  description: Summarizes team activity and sends a digest to managers.
+  background_color: "#1a1a2e"
+
+features:
+  bot_user:
+    display_name: Digest Agent
+    always_online: false
+
+oauth_config:
+  scopes:
+    bot:
+      - channels:history       # read public channel messages
+      - channels:read          # list public channels
+      - groups:history         # read private channel messages
+      - groups:read            # list private channels
+      - im:write               # open DMs
+      - chat:write             # send the digest DM
+      - users:read             # resolve user IDs → names
+
+settings:
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

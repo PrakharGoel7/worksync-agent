@@ -1,0 +1,19 @@
+# Secrets
+.env
+*.env.local
+
+# Local DB
+digests.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Next.js
+dashboard/.next/
+dashboard/node_modules/
+dashboard/tsconfig.tsbuildinfo
+
+# Vercel
+.vercel

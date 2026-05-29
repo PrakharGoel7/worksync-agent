@@ -165,7 +165,7 @@ def save_digest(digest: dict, lookback_days: int, total_messages: int, workspace
         if not existing:
             conn.execute(
                 "INSERT INTO action_items (digest_id, owner, task, deadline, channel) VALUES (?,?,?,?,?)",
-                (did, item["owner"], item["task"], item.get("deadline", "unspecified"), item["channel"]),
+                (did, item["owner"], item["task"], item.get("deadline", "unspecified"), item["channel"].lstrip('#')),
             )
 
     for b in digest.get("blockers", []):
@@ -176,7 +176,7 @@ def save_digest(digest: dict, lookback_days: int, total_messages: int, workspace
         if not existing:
             conn.execute(
                 "INSERT INTO blockers (digest_id, description, affected, channel, message_date) VALUES (?,?,?,?,?)",
-                (did, b["description"], b["affected"], b["channel"], b.get("date")),
+                (did, b["description"], b["affected"], b["channel"].lstrip('#'), b.get("date")),
             )
 
     for c in digest.get("contributions", []):
@@ -200,7 +200,7 @@ def save_digest(digest: dict, lookback_days: int, total_messages: int, workspace
             if isinstance(d, dict):
                 conn.execute(
                     "INSERT INTO decisions (digest_id, decision, channel, decision_date) VALUES (?,?,?,?)",
-                    (did, d["decision"], d.get("channel", ""), d.get("date")),
+                    (did, d["decision"], d.get("channel", "").lstrip('#'), d.get("date")),
                 )
             else:
                 conn.execute("INSERT INTO decisions (digest_id, decision) VALUES (?,?)", (did, d))
