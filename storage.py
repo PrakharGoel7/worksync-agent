@@ -136,6 +136,8 @@ def load_workspace_config(workspace_id: str) -> dict | None:
         "schedule_interval": r.get("schedule_interval") or "weekly",
         "last_run_at": r.get("last_run_at"),
         "model": r["model"],
+        "github_token": r.get("github_token"),
+        "github_repos": r.get("github_repos"),
     }
 
 

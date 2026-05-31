@@ -11,6 +11,9 @@ class Config:
         ]
         self.backfill_days: int = int(os.environ.get("BACKFILL_DAYS", os.environ.get("LOOKBACK_DAYS", "30")))
         self.model: str = os.environ.get("CLAUDE_MODEL", "anthropic/claude-sonnet-4-5")
+        self.github_token: str | None = os.environ.get("GITHUB_TOKEN")
+        self.github_repos: str | None = os.environ.get("GITHUB_REPOS")
+        self.dashboard_url: str | None = os.environ.get("DASHBOARD_URL")
 
         if not self.channels:
             raise ValueError("SLACK_CHANNELS must list at least one channel name")
@@ -31,6 +34,9 @@ class Config:
         cfg.backfill_days = data.get("backfill_days") or data.get("lookback_days") or 30
         cfg.schedule_interval = data.get("schedule_interval", "weekly")
         cfg.model = data.get("model") or os.environ.get("CLAUDE_MODEL", "anthropic/claude-sonnet-4-5")
+        cfg.github_token = data.get("github_token") or os.environ.get("GITHUB_TOKEN")
+        cfg.github_repos = data.get("github_repos") or os.environ.get("GITHUB_REPOS")
+        cfg.dashboard_url = os.environ.get("DASHBOARD_URL")
 
         if not cfg.channels:
             raise ValueError(f"Workspace '{workspace_id}' has no channels configured")
