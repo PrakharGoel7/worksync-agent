@@ -77,8 +77,6 @@ export default function OnboardingPage() {
         managerSlackId: manager?.id ?? '',
         backfillDays,
         scheduleInterval,
-        githubToken: githubToken || null,
-        githubRepos: githubRepos || null,
       }),
     })
     router.push('/')
@@ -100,7 +98,7 @@ export default function OnboardingPage() {
         background: 'var(--bg)',
       }}>
         <span style={{ fontFamily: 'var(--font-serif)', fontWeight: 700, fontSize: 14, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-          {workspaceName ? `Setting up ${workspaceName}` : 'Setup'}
+          {workspaceName ? `Setting up ${workspaceName}` : 'Set up Rundown'}
         </span>
       </header>
 
@@ -223,10 +221,10 @@ export default function OnboardingPage() {
         {step === 'manager' && (
           <div>
             <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: 22, fontWeight: 700, marginBottom: 8, color: 'var(--text)' }}>
-              Who receives the digest?
+              Who receives the Rundown?
             </h2>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', fontFamily: 'var(--font-jakarta)', marginBottom: 24, lineHeight: 1.6 }}>
-              The digest will be sent as a Slack DM to this person after each run.
+              The Rundown will be sent as a Slack DM to this person after each run.
             </p>
 
             {manager && (
@@ -312,10 +310,10 @@ export default function OnboardingPage() {
         {step === 'schedule' && (
           <div>
             <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: 22, fontWeight: 700, marginBottom: 8, color: 'var(--text)' }}>
-              Set up your digest schedule
+              Set up your Rundown schedule
             </h2>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', fontFamily: 'var(--font-jakarta)', marginBottom: 32, lineHeight: 1.6 }}>
-              We'll backfill historical messages once, then run digests automatically.
+              We'll backfill historical messages once, then run Rundown automatically.
             </p>
 
             {/* Backfill */}

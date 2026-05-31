@@ -33,17 +33,25 @@ interface Props {
   linesData?: Array<Record<string, string | number>>
 }
 
+function last90<T extends Record<string, string | number>>(rows: T[]): T[] {
+  const cutoff = new Date()
+  cutoff.setDate(cutoff.getDate() - 90)
+  const cutoffStr = cutoff.toISOString().slice(0, 10)
+  return rows.filter(r => (r.date as string) >= cutoffStr)
+}
+
 export default function ContributionChart({ data, linesData }: Props) {
   const { chartData, people } = useMemo(() => {
+    const slice = last90(data)
     const totals: Record<string, number> = {}
-    for (const row of data) {
+    for (const row of slice) {
       for (const [k, v] of Object.entries(row)) {
         if (k === 'date') continue
         totals[k] = (totals[k] ?? 0) + Number(v)
       }
     }
     const top = Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, TOP_N).map(([n]) => n)
-    const built = data.map(row => {
+    const built = slice.map(row => {
       const newRow: Record<string, string | number> = { date: row.date }
       let others = 0
       for (const [k, v] of Object.entries(row)) {
@@ -61,15 +69,16 @@ export default function ContributionChart({ data, linesData }: Props) {
 
   const { chartData: linesChartData, people: linesPeople } = useMemo(() => {
     if (!linesData?.length) return { chartData: [], people: [] }
+    const slice = last90(linesData)
     const totals: Record<string, number> = {}
-    for (const row of linesData) {
+    for (const row of slice) {
       for (const [k, v] of Object.entries(row)) {
         if (k === 'date') continue
         totals[k] = (totals[k] ?? 0) + Number(v)
       }
     }
     const top = Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, TOP_N).map(([n]) => n)
-    const built = linesData.map(row => {
+    const built = slice.map(row => {
       const newRow: Record<string, string | number> = { date: row.date }
       let others = 0
       for (const [k, v] of Object.entries(row)) {
@@ -125,9 +134,7 @@ export default function ContributionChart({ data, linesData }: Props) {
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>lines changed per week</div>
           <ResponsiveContainer width="100%" height={160}>
             <BarChart data={linesChartData} barSize={14}>
-              <XAxis dataKey="date" tick={{ fill: '#6b6560', fontSize: 10, fontFamily: 'var(--font-mono)' }} axisLine={{ stroke: 'var(--border)' }} tickLine={false}
-                tickFormatter={(v: string) => { const [y, m, d] = v.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }}
-              />
+              <XAxis dataKey="date" tick={false} axisLine={{ stroke: 'var(--border)' }} tickLine={false} />
               <YAxis tick={{ fill: '#6b6560', fontSize: 10, fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} />
               <Tooltip content={<Tip />} cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
               {linesPeople.map((p, i) => (
@@ -157,7 +164,7 @@ export function SectionTitle({ children }: { children: React.ReactNode }) {
 function Empty({ h }: { h: number }) {
   return (
     <div style={{ height: h, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)', fontSize: 13 }}>
-      No data yet — run a digest to populate
+      No data yet — run Rundown to populate
     </div>
   )
 }

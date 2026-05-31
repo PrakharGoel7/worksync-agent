@@ -35,13 +35,13 @@ function LoginContent() {
           fontFamily: 'var(--font-serif)', fontWeight: 700, fontSize: 26,
           letterSpacing: '0.04em', color: 'var(--text)', marginBottom: 8,
         }}>
-          WorkSync
+          Rundown
         </div>
         <p style={{
           fontSize: 14, color: 'var(--text-muted)', fontFamily: 'var(--font-jakarta)',
           lineHeight: 1.6, marginBottom: 8,
         }}>
-          Your Slack activity, distilled into a manager digest.
+          Your team's week, in under a minute.
         </p>
         <p style={{
           fontSize: 13, color: 'var(--text-dim)', fontFamily: 'var(--font-jakarta)',

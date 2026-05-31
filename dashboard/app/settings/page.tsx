@@ -17,6 +17,9 @@ export default function SettingsPage() {
   const [managerOpen, setManagerOpen] = useState(false)
   const [backfillDays, setBackfillDays] = useState(30)
   const [scheduleInterval, setScheduleInterval] = useState('weekly')
+  const [githubToken, setGithubToken] = useState('')
+  const [githubRepos, setGithubRepos] = useState('')
+  const [githubConnected, setGithubConnected] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [pendingChannelNames, setPendingChannelNames] = useState<string[]>([])
@@ -28,6 +31,8 @@ export default function SettingsPage() {
       setScheduleInterval(d.scheduleInterval ?? 'weekly')
       if (d.channels?.length) setPendingChannelNames(d.channels)
       if (d.managerSlackId) setPendingManagerId(d.managerSlackId)
+      setGithubRepos(d.githubRepos ?? '')
+      setGithubConnected(!!d.githubConnected)
     })
     fetch('/api/slack/channels').then(r => r.json()).then(d => setChannels(d.channels ?? []))
     fetch('/api/slack/users').then(r => r.json()).then(d => setMembers(d.members ?? []))
@@ -76,8 +81,14 @@ export default function SettingsPage() {
         managerSlackId: manager?.id ?? '',
         backfillDays,
         scheduleInterval,
+        ...(githubToken.trim() ? { githubToken: githubToken.trim() } : {}),
+        githubRepos: githubRepos.trim() || null,
       }),
     })
+    if (githubToken.trim()) {
+      setGithubConnected(true)
+      setGithubToken('')
+    }
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
@@ -368,6 +379,92 @@ export default function SettingsPage() {
                 {interval === 'biweekly' ? 'Biweekly' : interval.charAt(0).toUpperCase() + interval.slice(1)}
               </button>
             ))}
+          </div>
+        </section>
+
+        {/* Divider */}
+        <div style={{ height: 1, background: 'var(--border)', marginBottom: 40 }} />
+
+        {/* GitHub section */}
+        <section style={{ marginBottom: 48 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+            <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: 18, fontWeight: 700, color: 'var(--text)', margin: 0 }}>
+              GitHub
+            </h2>
+            {githubConnected && (
+              <span style={{
+                fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 600,
+                color: 'var(--green)', background: 'rgba(21,128,61,0.08)',
+                border: '1px solid rgba(21,128,61,0.2)', borderRadius: 10,
+                padding: '2px 8px', letterSpacing: '0.04em',
+              }}>
+                Connected
+              </span>
+            )}
+          </div>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', fontFamily: 'var(--font-jakarta)', marginBottom: 20, lineHeight: 1.6 }}>
+            Connect a GitHub token to show real PR data instead of mock data.
+          </p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div>
+              <label style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', display: 'block', marginBottom: 6 }}>
+                PERSONAL ACCESS TOKEN
+              </label>
+              <input
+                type="password"
+                value={githubToken}
+                onChange={e => setGithubToken(e.target.value)}
+                placeholder={githubConnected ? '••••••••  (leave blank to keep existing)' : 'ghp_…'}
+                style={{
+                  width: '100%', padding: '10px 14px', boxSizing: 'border-box',
+                  border: '1px solid var(--border)', borderRadius: 8,
+                  background: 'var(--surface)', color: 'var(--text)',
+                  fontSize: 13, fontFamily: 'var(--font-mono)', outline: 'none',
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', display: 'block', marginBottom: 6 }}>
+                REPOSITORIES (comma-separated)
+              </label>
+              <input
+                type="text"
+                value={githubRepos}
+                onChange={e => setGithubRepos(e.target.value)}
+                placeholder="owner/repo, owner/other-repo"
+                style={{
+                  width: '100%', padding: '10px 14px', boxSizing: 'border-box',
+                  border: '1px solid var(--border)', borderRadius: 8,
+                  background: 'var(--surface)', color: 'var(--text)',
+                  fontSize: 13, fontFamily: 'var(--font-mono)', outline: 'none',
+                }}
+              />
+            </div>
+            {githubConnected && (
+              <button
+                onClick={async () => {
+                  await fetch('/api/workspace', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ githubToken: null, githubRepos: null }),
+                  })
+                  setGithubConnected(false)
+                  setGithubToken('')
+                  setGithubRepos('')
+                }}
+                style={{
+                  alignSelf: 'flex-start', padding: '6px 14px', borderRadius: 6,
+                  border: '1px solid var(--border)', background: 'transparent',
+                  fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-dim)',
+                  cursor: 'pointer', transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--red)'; e.currentTarget.style.color = 'var(--red)' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-dim)' }}
+              >
+                Disconnect GitHub
+              </button>
+            )}
           </div>
         </section>
 

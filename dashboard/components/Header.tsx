@@ -43,7 +43,7 @@ export default function Header({ onRun, running }: Props) {
           textTransform: 'uppercase',
           color: 'var(--text)',
         }}>
-          {teamName || 'Team Digest'}
+          {teamName || 'Rundown'}
         </span>
         <span style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
           {today}

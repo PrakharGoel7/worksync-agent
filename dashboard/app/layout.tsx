@@ -7,8 +7,8 @@ const jakarta = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-jakart
 const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap' })
 
 export const metadata: Metadata = {
-  title: 'Team Digest',
-  description: 'Slack team activity dashboard',
+  title: 'Rundown',
+  description: "Your team's week, in under a minute.",
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

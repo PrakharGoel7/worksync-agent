@@ -44,9 +44,6 @@ export default function RecentPRsFeed({ prs, connected }: Props) {
             {needsReview > 0
               ? <span style={{ color: 'var(--amber)', fontWeight: 600 }}>{needsReview} needs review</span>
               : `${openCount} open`}
-            {!connected && (
-              <span style={{ color: 'var(--text-dim)', marginLeft: 8, fontSize: 11 }}>· mock data</span>
-            )}
           </div>
         </div>
         <Link

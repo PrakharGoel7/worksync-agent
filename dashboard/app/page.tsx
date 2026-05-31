@@ -63,11 +63,16 @@ export default function Dashboard() {
   const [githubData, setGithubData] = useState<GithubData | null>(null)
 
   useEffect(() => {
-    fetch('/api/workspace').then(r => r.json()).then(d => {
-      if (!d.channels?.length || !d.managerSlackId) {
-        router.replace('/onboarding')
+    fetch('/api/workspace').then(r => {
+      if (r.status === 401 || r.status === 404) {
+        router.replace('/login')
+        return null
       }
-    }).catch(() => {})
+      return r.json()
+    }).then(d => {
+      if (!d) return
+      if (!d.channels?.length || !d.managerSlackId) router.replace('/onboarding')
+    }).catch(() => router.replace('/login'))
   }, [])
 
   const fetchData = useCallback(async (ch?: string) => {
@@ -215,7 +220,7 @@ export default function Dashboard() {
             }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <BlockersFeed blockers={data.blockers} />
-                {githubData && (
+                {githubData && data.stats.activeContributors > 0 && (
                   <RecentPRsFeed prs={githubData.recentPRs} connected={githubData.connected} />
                 )}
                 <ActionItemsTable
@@ -228,7 +233,7 @@ export default function Dashboard() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <ContributionChart
                   data={data.contributionsByDigest}
-                  linesData={githubData?.linesPerWeek}
+                  linesData={data.stats.activeContributors > 0 ? githubData?.linesPerWeek : undefined}
                 />
                 <DecisionsLog decisions={data.decisions} />
               </div>

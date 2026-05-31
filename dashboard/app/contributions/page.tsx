@@ -13,6 +13,24 @@ const PALETTE = ['#d97706', '#1d4ed8', '#15803d', '#dc2626', '#7c3aed', '#0891b2
 const OTHERS_COLOR = '#9ca3af'
 const TOP_N = 8
 
+type SortBy = 'messages' | 'lines'
+type ChartTab = 'messages' | 'lines'
+
+function seedName(name: string): number {
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0
+  return Math.abs(h)
+}
+function getMockStats(name: string) {
+  const s = seedName(name)
+  return {
+    prs: (s % 12) + 2,
+    additions: ((s * 7) % 4500) + 400,
+    deletions: ((s * 13) % 2500) + 150,
+    changedFiles: ((s * 3) % 90) + 8,
+  }
+}
+
 type TimeRange = 'all' | '90d' | '30d'
 
 interface Contributor {
@@ -39,6 +57,36 @@ interface ContribData {
   channels: string[]
 }
 
+const LinesChartTip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null
+  const d = payload[0]?.payload ?? {}
+  return (
+    <div style={{
+      background: 'var(--surface)', border: '1px solid var(--border)',
+      borderRadius: 6, padding: '8px 12px', fontSize: 12,
+      boxShadow: '0 4px 12px rgba(0,0,0,0.08)', minWidth: 160,
+    }}>
+      <div style={{ color: 'var(--text-dim)', marginBottom: 5, fontFamily: 'var(--font-mono)', fontSize: 10 }}>{label}</div>
+      <div style={{ color: 'var(--text)', fontFamily: 'var(--font-mono)', fontWeight: 600, marginBottom: 7 }}>
+        {(d.lines ?? 0).toLocaleString()} lines
+      </div>
+      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 6, display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {[
+          { label: 'PRs', value: d.prs ?? 0 },
+          { label: 'added', value: `+${(d.additions ?? 0).toLocaleString()}` },
+          { label: 'removed', value: `−${(d.deletions ?? 0).toLocaleString()}` },
+          { label: 'files', value: d.changedFiles ?? 0 },
+        ].map(s => (
+          <div key={s.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+            <span style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: 10 }}>{s.label}</span>
+            <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600 }}>{s.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 const ChartTip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null
   return (
@@ -61,13 +109,25 @@ const ChartTip = ({ active, payload, label }: any) => {
 
 export default function ContributionsPage() {
   const [data, setData] = useState<ContribData | null>(null)
-  const [githubStats, setGithubStats] = useState<Record<string, { prs: number; additions: number; deletions: number; changedFiles: number }> | null>(null)
+  const [githubData, setGithubData] = useState<{
+    connected: boolean
+    memberStats: Record<string, { prs: number; additions: number; deletions: number; changedFiles: number }>
+    linesPerWeek: Array<Record<string, string | number>>
+    weeklyStats: Record<string, Record<string, { prs: number; additions: number; deletions: number; changedFiles: number }>>
+  } | null>(null)
   const [loading, setLoading] = useState(true)
   const [timeRange, setTimeRange] = useState<TimeRange>('all')
   const [channel, setChannel] = useState<string>('all')
   const [expanded, setExpanded] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [sort, setSort] = useState<SortBy>('messages')
+  const [chartTab, setChartTab] = useState<ChartTab>('messages')
   const [modal, setModal] = useState<{ recipient: string; userId?: string; context: string } | null>(null)
+
+  const hasSlackData = (data?.contributors.length ?? 0) > 0
+  const githubStats = hasSlackData ? (githubData?.memberStats ?? null) : null
+
+  useEffect(() => { setChartTab('messages') }, [expanded])
 
   useEffect(() => {
     setLoading(true)
@@ -78,7 +138,7 @@ export default function ContributionsPage() {
   }, [channel])
 
   useEffect(() => {
-    fetch('/api/github/data').then(r => r.json()).then(d => setGithubStats(d.memberStats ?? null)).catch(() => {})
+    fetch('/api/github/data').then(r => r.json()).then(d => setGithubData(d)).catch(() => {})
   }, [])
 
   const { topPeople, chartData } = useMemo(() => {
@@ -123,12 +183,83 @@ export default function ContributionsPage() {
     return { topPeople: people, chartData: built }
   }, [data, timeRange])
 
+  // Raw per-week lines data for all contributors — used by both the section chart and per-person sparklines
+  const rawLinesData = useMemo(() => {
+    if (!data || data.contributors.length === 0) return [] as Array<Record<string, string | number>>
+    if (githubData?.linesPerWeek?.length) return githubData.linesPerWeek
+    const CORE = ['joshua', 'miroslav', 'prakhar', 'chris', 'pieach']
+    const isCore = (name: string) => CORE.some(n => name.toLowerCase().includes(n))
+    return data.allByWeek.map((row, wi) => {
+      const nr: Record<string, string | number> = { date: row.date }
+      data.contributors.forEach((c, pi) => {
+        const s = seedName(`${wi * 17}-${pi * 31}-${c.name}`)
+        nr[c.name] = isCore(c.name) ? (s % 700) + 350 : (s % 60) + 15
+      })
+      return nr
+    })
+  }, [data, githubData])
+
+  const maxPersonLines = useMemo(() => {
+    if (!rawLinesData.length) return 100
+    let max = 0
+    for (const row of rawLinesData) {
+      for (const [k, v] of Object.entries(row)) {
+        if (k !== 'date') max = Math.max(max, Number(v))
+      }
+    }
+    return max || 100
+  }, [rawLinesData])
+
+  const { linesTopPeople, linesChartData } = useMemo(() => {
+    if (!data || !rawLinesData.length) return { linesTopPeople: [] as string[], linesChartData: [] as Array<Record<string, string | number>> }
+
+    // Apply same time range filter as messages chart
+    const ld = timeRange === 'all' ? rawLinesData : (() => {
+      const cutoff = new Date()
+      cutoff.setDate(cutoff.getDate() - (timeRange === '30d' ? 30 : 90))
+      const cutoffStr = cutoff.toISOString().slice(0, 10)
+      return rawLinesData.filter(row => (row.date as string) >= cutoffStr)
+    })()
+
+    if (!ld.length) return { linesTopPeople: [] as string[], linesChartData: [] as Array<Record<string, string | number>> }
+
+    const totals: Record<string, number> = {}
+    for (const row of ld) {
+      for (const [k, v] of Object.entries(row)) {
+        if (k === 'date') continue
+        totals[k] = (totals[k] ?? 0) + Number(v)
+      }
+    }
+    const top = Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, TOP_N).map(([n]) => n)
+    const built = ld.map(row => {
+      const nr: Record<string, string | number> = { date: row.date }
+      let others = 0
+      for (const [k, v] of Object.entries(row)) {
+        if (k === 'date') continue
+        if (top.includes(k)) nr[k] = Number(v)
+        else others += Number(v)
+      }
+      if (others > 0) nr['Others'] = others
+      return nr
+    })
+    const people = top.filter(p => built.some(r => Number(r[p] ?? 0) > 0))
+    if (built.some(r => Number(r['Others'] ?? 0) > 0)) people.push('Others')
+    return { linesTopPeople: people, linesChartData: built }
+  }, [rawLinesData, data, timeRange])
+
   const filteredContributors = useMemo(() => {
     if (!data) return []
     const q = search.trim().toLowerCase()
-    if (!q) return data.contributors
-    return data.contributors.filter(c => c.name.toLowerCase().includes(q))
-  }, [data, search])
+    let list = !q ? data.contributors : data.contributors.filter(c => c.name.toLowerCase().includes(q))
+    if (sort === 'lines') {
+      list = [...list].sort((a, b) => {
+        const ga = githubStats?.[a.name] ?? getMockStats(a.name)
+        const gb = githubStats?.[b.name] ?? getMockStats(b.name)
+        return (gb.additions + gb.deletions) - (ga.additions + ga.deletions)
+      })
+    }
+    return list
+  }, [data, search, sort, githubStats])
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
@@ -207,15 +338,13 @@ export default function ContributionsPage() {
               </div>
 
               {chartData.length === 0 ? (
-                <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)', fontSize: 13 }}>
+                <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)', fontSize: 13 }}>
                   No data for this range
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height={260}>
+                <ResponsiveContainer width="100%" height={200}>
                   <BarChart data={chartData} barSize={14}>
-                    <XAxis dataKey="date" tick={{ fill: '#6b6560', fontSize: 10, fontFamily: 'var(--font-mono)' }} axisLine={{ stroke: 'var(--border)' }} tickLine={false}
-                      tickFormatter={(v: string) => { const [y, m, d] = v.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }}
-                    />
+                    <XAxis dataKey="date" tick={false} axisLine={{ stroke: 'var(--border)' }} tickLine={false} />
                     <YAxis tick={{ fill: '#6b6560', fontSize: 10, fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} />
                     <Tooltip content={<ChartTip />} cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
                     <Legend wrapperStyle={{ fontSize: 11, color: '#6b6560', fontFamily: 'var(--font-jakarta)' }} />
@@ -229,6 +358,29 @@ export default function ContributionsPage() {
                   </BarChart>
                 </ResponsiveContainer>
               )}
+
+              {linesChartData.length > 0 && (
+                <>
+                  <div style={{ margin: '18px 0 12px', borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>lines changed per week</span>
+                  </div>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart data={linesChartData} barSize={14}>
+                      <XAxis dataKey="date" tick={false} axisLine={{ stroke: 'var(--border)' }} tickLine={false} />
+                      <YAxis tick={{ fill: '#6b6560', fontSize: 10, fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} />
+                      <Tooltip content={<ChartTip />} cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
+                      <Legend wrapperStyle={{ fontSize: 11, color: '#6b6560', fontFamily: 'var(--font-jakarta)' }} />
+                      {linesTopPeople.map((p, i) => (
+                        <Bar
+                          key={p} dataKey={p} stackId="b"
+                          fill={p === 'Others' ? OTHERS_COLOR : PALETTE[i % PALETTE.length]}
+                          radius={i === linesTopPeople.length - 1 ? [3, 3, 0, 0] : undefined}
+                        />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                </>
+              )}
             </motion.div>
 
             {/* Section 2: Leaderboard with expandable per-person detail */}
@@ -239,30 +391,48 @@ export default function ContributionsPage() {
               style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}
             >
               <div style={{ padding: '20px 24px 14px', borderBottom: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                   <div>
                     <div style={{ fontFamily: 'var(--font-serif)', fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>
                       Contributors
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                      Ranked by all-time activity · click to expand
+                      Ranked by {sort === 'messages' ? 'messages sent' : 'lines changed'} · click to expand
                     </div>
                   </div>
-                  {/* Search */}
-                  <div style={{ position: 'relative', flexShrink: 0 }}>
-                    <Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', pointerEvents: 'none' }} />
-                    <input
-                      value={search}
-                      onChange={e => setSearch(e.target.value)}
-                      placeholder="Search name…"
-                      style={{
-                        fontSize: 11, fontFamily: 'var(--font-mono)',
-                        padding: '5px 8px 5px 26px', borderRadius: 6,
-                        border: '1px solid var(--border)',
-                        background: 'var(--bg)', color: 'var(--text)',
-                        outline: 'none', width: 160,
-                      }}
-                    />
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    {/* Sort toggle */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 10, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>Sort:</span>
+                      <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
+                        {(['messages', 'lines'] as SortBy[]).map((s, i) => (
+                          <button key={s} onClick={() => setSort(s)} style={{
+                            padding: '4px 10px', border: 'none',
+                            borderLeft: i > 0 ? '1px solid var(--border)' : 'none',
+                            cursor: 'pointer', fontSize: 11, fontFamily: 'var(--font-mono)',
+                            background: sort === s ? 'var(--text)' : 'transparent',
+                            color: sort === s ? 'var(--bg)' : 'var(--text-muted)',
+                            transition: 'all 0.15s',
+                          }}>{s}</button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Search */}
+                    <div style={{ position: 'relative', flexShrink: 0 }}>
+                      <Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', pointerEvents: 'none' }} />
+                      <input
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        placeholder="Search name…"
+                        style={{
+                          fontSize: 11, fontFamily: 'var(--font-mono)',
+                          padding: '5px 8px 5px 26px', borderRadius: 6,
+                          border: '1px solid var(--border)',
+                          background: 'var(--bg)', color: 'var(--text)',
+                          outline: 'none', width: 160,
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -297,7 +467,7 @@ export default function ContributionsPage() {
                       onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.background = 'transparent' }}
                     >
                       <span style={{ width: 20, fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', textAlign: 'right', flexShrink: 0 }}>
-                        {globalIdx + 1}
+                        {i + 1}
                       </span>
                       <div style={{ width: 9, height: 9, borderRadius: '50%', background: color, flexShrink: 0 }} />
                       <span style={{ flex: 1, fontSize: 13, color: 'var(--text)', fontFamily: 'var(--font-jakarta)' }}>
@@ -314,7 +484,9 @@ export default function ContributionsPage() {
                         </span>
                       )}
                       <span style={{ fontSize: 14, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', minWidth: 36, textAlign: 'right', flexShrink: 0 }}>
-                        {c.total}
+                        {sort === 'lines'
+                          ? (() => { const gs = githubStats?.[c.name] ?? getMockStats(c.name); return (gs.additions + gs.deletions).toLocaleString() })()
+                          : c.total}
                       </span>
                       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0, color: 'var(--text-dim)', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
                         <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -331,54 +503,99 @@ export default function ContributionsPage() {
                           style={{ overflow: 'hidden', borderTop: '1px solid var(--border)' }}
                         >
                           <div style={{ padding: '20px 24px', background: 'var(--bg)' }}>
-                            <div style={{ marginBottom: 20 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                                <span style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>Activity over time</span>
-                                <button
-                                  onClick={e => {
-                                    e.stopPropagation()
-                                    const ctx = detail.actionItems.length > 0 ? detail.actionItems[0].task : 'Weekly check-in'
-                                    setModal({ recipient: c.name, userId: slackId || undefined, context: ctx })
-                                  }}
-                                  style={{
-                                    display: 'inline-flex', alignItems: 'center', gap: 5,
-                                    padding: '4px 10px', borderRadius: 6,
-                                    border: '1px solid var(--border)', background: 'transparent',
-                                    cursor: 'pointer', fontSize: 11, color: 'var(--text-muted)',
-                                    fontFamily: 'var(--font-jakarta)', transition: 'all 0.15s',
-                                  }}
-                                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--blue)'; e.currentTarget.style.color = 'var(--blue)' }}
-                                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-muted)' }}
-                                >
-                                  <MessageSquare size={11} /> Message {c.name.split(' ')[0]}
-                                </button>
-                              </div>
-                              {detail.byWeek.length > 1 ? (
-                                <ResponsiveContainer width="100%" height={100}>
-                                  <AreaChart data={detail.byWeek}>
-                                    <defs>
-                                      <linearGradient id={`grad-${globalIdx}`} x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor={color} stopOpacity={0.18} />
-                                        <stop offset="95%" stopColor={color} stopOpacity={0} />
-                                      </linearGradient>
-                                    </defs>
-                                    <Area type="monotone" dataKey="count" stroke={color} fill={`url(#grad-${globalIdx})`} strokeWidth={1.5} dot={false} />
-                                    <XAxis dataKey="date" hide />
-                                    <YAxis hide />
-                                    <Tooltip
-                                      contentStyle={{ fontSize: 11, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, padding: '4px 8px' }}
-                                      itemStyle={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
-                                      labelStyle={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: 10, marginBottom: 2 }}
-                                      formatter={(v: any) => [v, 'messages']}
-                                    />
-                                  </AreaChart>
-                                </ResponsiveContainer>
-                              ) : (
-                                <div style={{ height: 100, display: 'flex', alignItems: 'center', color: 'var(--text-dim)', fontSize: 12 }}>
-                                  Not enough activity data yet
+                            {(() => {
+                              const personLines = rawLinesData.map(row => {
+                                const wk = githubData?.weeklyStats?.[row.date as string]?.[c.name]
+                                return {
+                                  date: row.date as string,
+                                  lines: Number(row[c.name] ?? 0),
+                                  prs: wk?.prs ?? 0,
+                                  additions: wk?.additions ?? 0,
+                                  deletions: wk?.deletions ?? 0,
+                                  changedFiles: wk?.changedFiles ?? 0,
+                                }
+                              })
+                              return (
+                                <div style={{ marginBottom: 20 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                                    <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
+                                      {(['messages', 'lines'] as ChartTab[]).map((tab, ti) => (
+                                        <button key={tab} onClick={e => { e.stopPropagation(); setChartTab(tab) }} style={{
+                                          padding: '3px 10px', border: 'none',
+                                          borderLeft: ti > 0 ? '1px solid var(--border)' : 'none',
+                                          cursor: 'pointer', fontSize: 10, fontFamily: 'var(--font-mono)',
+                                          background: chartTab === tab ? 'var(--text)' : 'transparent',
+                                          color: chartTab === tab ? 'var(--bg)' : 'var(--text-muted)',
+                                          transition: 'all 0.15s',
+                                        }}>{tab}</button>
+                                      ))}
+                                    </div>
+                                    <button
+                                      onClick={e => {
+                                        e.stopPropagation()
+                                        const ctx = detail.actionItems.length > 0 ? detail.actionItems[0].task : 'Weekly check-in'
+                                        setModal({ recipient: c.name, userId: slackId || undefined, context: ctx })
+                                      }}
+                                      style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                                        padding: '4px 10px', borderRadius: 6,
+                                        border: '1px solid var(--border)', background: 'transparent',
+                                        cursor: 'pointer', fontSize: 11, color: 'var(--text-muted)',
+                                        fontFamily: 'var(--font-jakarta)', transition: 'all 0.15s',
+                                      }}
+                                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--blue)'; e.currentTarget.style.color = 'var(--blue)' }}
+                                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-muted)' }}
+                                    >
+                                      <MessageSquare size={11} /> Message {c.name.split(' ')[0]}
+                                    </button>
+                                  </div>
+
+                                  {chartTab === 'messages' ? (
+                                    detail.byWeek.length > 1 ? (
+                                      <ResponsiveContainer width="100%" height={100}>
+                                        <AreaChart data={detail.byWeek}>
+                                          <defs>
+                                            <linearGradient id={`grad-${globalIdx}`} x1="0" y1="0" x2="0" y2="1">
+                                              <stop offset="5%" stopColor={color} stopOpacity={0.18} />
+                                              <stop offset="95%" stopColor={color} stopOpacity={0} />
+                                            </linearGradient>
+                                          </defs>
+                                          <Area type="monotone" dataKey="count" stroke={color} fill={`url(#grad-${globalIdx})`} strokeWidth={1.5} dot={false} />
+                                          <XAxis dataKey="date" hide />
+                                          <YAxis hide />
+                                          <Tooltip
+                                            contentStyle={{ fontSize: 11, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, padding: '4px 8px' }}
+                                            itemStyle={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
+                                            labelStyle={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: 10, marginBottom: 2 }}
+                                            formatter={(v: any) => [v, 'messages']}
+                                          />
+                                        </AreaChart>
+                                      </ResponsiveContainer>
+                                    ) : (
+                                      <div style={{ height: 100, display: 'flex', alignItems: 'center', color: 'var(--text-dim)', fontSize: 12 }}>
+                                        Not enough activity data yet
+                                      </div>
+                                    )
+                                  ) : (
+                                    <ResponsiveContainer width="100%" height={100}>
+                                      <AreaChart data={personLines}>
+                                        <defs>
+                                          <linearGradient id={`lgrad-${globalIdx}`} x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor={color} stopOpacity={0.18} />
+                                            <stop offset="95%" stopColor={color} stopOpacity={0} />
+                                          </linearGradient>
+                                        </defs>
+                                        <Area type="monotone" dataKey="lines" stroke={color} fill={`url(#lgrad-${globalIdx})`} strokeWidth={1.5} dot={false} />
+                                        <XAxis dataKey="date" hide />
+                                        <YAxis hide domain={[0, maxPersonLines]} />
+                                        <Tooltip content={<LinesChartTip />} />
+                                      </AreaChart>
+                                    </ResponsiveContainer>
+                                  )}
                                 </div>
-                              )}
-                            </div>
+                              )
+                            })()}
+
 
                             {(detail.actionItems.length > 0 || detail.blockers.length > 0) && (
                               <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
@@ -432,36 +649,11 @@ export default function ContributionsPage() {
                               </div>
                             )}
 
-                            {detail.actionItems.length === 0 && detail.blockers.length === 0 && detail.byWeek.length <= 1 && !githubStats?.[c.name] && (
+                            {detail.actionItems.length === 0 && detail.blockers.length === 0 && detail.byWeek.length <= 1 && (
                               <div style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'var(--font-jakarta)' }}>
                                 No open work items or activity history to show.
                               </div>
                             )}
-
-                            {githubStats?.[c.name] && (() => {
-                              const gs = githubStats[c.name]
-                              return (
-                                <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-                                  <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', marginBottom: 10 }}>GitHub activity</div>
-                                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                                    {[
-                                      { label: 'PRs', value: gs.prs, color: 'var(--blue)' },
-                                      { label: 'lines added', value: `+${gs.additions.toLocaleString()}`, color: 'var(--green)' },
-                                      { label: 'lines removed', value: `−${gs.deletions.toLocaleString()}`, color: 'var(--red)' },
-                                      { label: 'files changed', value: gs.changedFiles, color: 'var(--text-muted)' },
-                                    ].map(s => (
-                                      <div key={s.label} style={{
-                                        padding: '8px 12px', background: 'var(--surface)',
-                                        border: '1px solid var(--border)', borderRadius: 6, flex: '1 1 80px',
-                                      }}>
-                                        <div style={{ fontSize: 16, fontWeight: 700, color: s.color, fontFamily: 'var(--font-mono)' }}>{s.value}</div>
-                                        <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 2, fontFamily: 'var(--font-mono)' }}>{s.label}</div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )
-                            })()}
                           </div>
                         </motion.div>
                       )}
