@@ -9,9 +9,6 @@ const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', displ
 export const metadata: Metadata = {
   title: 'Rundown',
   description: "Your team's week, in under a minute.",
-  icons: {
-    icon: '/icon.svg',
-  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
