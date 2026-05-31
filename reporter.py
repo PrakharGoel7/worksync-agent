@@ -33,7 +33,7 @@ def build_blocks(
     # ── Header ────────────────────────────────────────────────────────────────
     blocks.append({
         "type": "header",
-        "text": {"type": "plain_text", "text": f"Team Digest — {today}", "emoji": True},
+        "text": {"type": "plain_text", "text": f"Rundown — {today}", "emoji": True},
     })
     blocks.append({
         "type": "context",
@@ -116,7 +116,7 @@ def send_digest(client: WebClient, manager_id: str, blocks: list[dict]) -> None:
         client.chat_postMessage(
             channel=channel_id,
             blocks=blocks,
-            text="Your team digest is ready.",
+            text="Your Rundown is ready.",
         )
     except SlackApiError as e:
         raise RuntimeError(f"Failed to send digest: {e.response['error']}") from e
