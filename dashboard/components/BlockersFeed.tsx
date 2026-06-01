@@ -13,7 +13,7 @@ interface Props {
 export default function BlockersFeed({ blockers }: Props) {
   const open = blockers.filter(b => !b.status || b.status === 'open')
   const shown = open.slice(0, PREVIEW)
-  const hasMore = open.length > PREVIEW
+  const hasBlockers = open.length > 0
 
   return (
     <motion.div
@@ -59,7 +59,7 @@ export default function BlockersFeed({ blockers }: Props) {
             ))}
           </div>
 
-          {hasMore && (
+          {hasBlockers && (
             <Link
               href="/blockers"
               style={{

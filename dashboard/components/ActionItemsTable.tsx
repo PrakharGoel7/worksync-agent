@@ -27,7 +27,7 @@ export default function ActionItemsTable({ items, owners, onToggle }: Props) {
   )
 
   const shown = filtered.slice(0, PREVIEW)
-  const hasMore = filtered.length > PREVIEW
+  const hasItems = filtered.length > 0
 
   return (
     <motion.div
@@ -116,7 +116,7 @@ export default function ActionItemsTable({ items, owners, onToggle }: Props) {
             ))}
           </AnimatePresence>
 
-          {hasMore && (
+          {hasItems && (
             <Link
               href="/action-items"
               style={{
