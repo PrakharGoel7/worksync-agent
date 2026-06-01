@@ -13,7 +13,7 @@ class Config:
         self.model: str = os.environ.get("CLAUDE_MODEL", "anthropic/claude-sonnet-4-5")
         self.github_token: str | None = os.environ.get("GITHUB_TOKEN")
         self.github_repos: str | None = os.environ.get("GITHUB_REPOS")
-        self.dashboard_url: str | None = os.environ.get("DASHBOARD_URL")
+        self.dashboard_url: str | None = os.environ.get("DASHBOARD_URL", "https://getrundown.vercel.app")
 
         if not self.channels:
             raise ValueError("SLACK_CHANNELS must list at least one channel name")
@@ -36,7 +36,7 @@ class Config:
         cfg.model = data.get("model") or os.environ.get("CLAUDE_MODEL", "anthropic/claude-sonnet-4-5")
         cfg.github_token = data.get("github_token") or os.environ.get("GITHUB_TOKEN")
         cfg.github_repos = data.get("github_repos") or os.environ.get("GITHUB_REPOS")
-        cfg.dashboard_url = os.environ.get("DASHBOARD_URL")
+        cfg.dashboard_url = os.environ.get("DASHBOARD_URL", "https://getrundown.vercel.app")
 
         if not cfg.channels:
             raise ValueError(f"Workspace '{workspace_id}' has no channels configured")
