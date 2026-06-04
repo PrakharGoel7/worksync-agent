@@ -26,9 +26,15 @@ def _render_messages(channel_name: str, messages: list[dict]) -> str:
             date = datetime.fromtimestamp(float(msg["ts"])).strftime("%Y-%m-%d")
         except (KeyError, ValueError):
             date = "unknown"
-        lines.append(f"\n[{date}] [{msg['user']}]: {msg['text']}")
+        speaker = msg["user"]
+        if msg.get("user_id") and msg.get("user_id") != "unknown":
+            speaker = f"{speaker} <@{msg['user_id']}>"
+        lines.append(f"\n[{date}] [{speaker}]: {msg['text']}")
         for reply in msg.get("replies", []):
-            lines.append(f"  ↳ [{reply['user']}]: {reply['text']}")
+            reply_speaker = reply["user"]
+            if reply.get("user_id") and reply.get("user_id") != "unknown":
+                reply_speaker = f"{reply_speaker} <@{reply['user_id']}>"
+            lines.append(f"  ↳ [{reply_speaker}]: {reply['text']}")
     return "\n".join(lines)
 
 

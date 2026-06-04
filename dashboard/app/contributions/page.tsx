@@ -35,6 +35,7 @@ type TimeRange = 'all' | '90d' | '30d'
 
 interface Contributor {
   name: string
+  userId?: string
   total: number
   recent: number
   prior: number

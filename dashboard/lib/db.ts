@@ -79,6 +79,7 @@ const initPromise: Promise<void> = (async () => {
       sql: `CREATE TABLE IF NOT EXISTS contributions (
         id           INTEGER PRIMARY KEY AUTOINCREMENT,
         digest_id    INTEGER REFERENCES digests(id),
+        user_id      TEXT DEFAULT '',
         person       TEXT,
         item         TEXT,
         message_date TEXT
@@ -121,6 +122,8 @@ const initPromise: Promise<void> = (async () => {
     `ALTER TABLE folders ADD COLUMN color TEXT DEFAULT '#f59e0b'`,
     `ALTER TABLE workspaces ADD COLUMN github_token TEXT DEFAULT NULL`,
     `ALTER TABLE workspaces ADD COLUMN github_repos TEXT DEFAULT NULL`,
+    `ALTER TABLE contributions ADD COLUMN user_id TEXT DEFAULT ''`,
+    `ALTER TABLE message_counts ADD COLUMN user_id TEXT NOT NULL DEFAULT ''`,
   ]) {
     try { await client.execute({ sql, args: [] }) } catch { /* already exists */ }
   }
@@ -132,6 +135,24 @@ function row(r: any, columns: string[]): any {
 
 function rows(result: Awaited<ReturnType<typeof client.execute>>): any[] {
   return result.rows.map(r => row(r, result.columns))
+}
+
+function normalizePersonName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+}
+
+function splitPeople(value: string): string[] {
+  return value
+    .replace(/\s+and\s+/gi, ',')
+    .split(',')
+    .map(v => v.trim())
+    .filter(Boolean)
+}
+
+function personKey(userId?: string, name?: string): string {
+  const id = String(userId ?? '').trim()
+  if (id) return `id:${id}`
+  return `name:${normalizePersonName(String(name ?? ''))}`
 }
 
 // ── Workspace CRUD ──────────────────────────────────────────────────────────
@@ -233,7 +254,7 @@ export async function getDashboardData(workspaceId?: string, channel?: string) {
       client.execute({ sql: `SELECT COALESCE(SUM(total_messages),0) AS v FROM digests d ${where}`, args: p([]) }),
       client.execute({ sql: `SELECT COUNT(*) AS v FROM action_items ai JOIN digests d ON d.id = ai.digest_id ${where} AND ai.status = 'open' ${chFilter}`, args: pch(chArgs) }),
       client.execute({ sql: `SELECT COUNT(*) AS v FROM blockers b JOIN digests d ON d.id = b.digest_id ${where} AND (b.status IS NULL OR b.status = 'open') ${chFilterB}`, args: pch(chArgs) }),
-      client.execute({ sql: `SELECT COUNT(DISTINCT person) AS v FROM message_counts mc WHERE mc.workspace_id = ? ${mcChFilter}`, args: [workspaceId ?? '', ...mcChArgs] }),
+      client.execute({ sql: `SELECT COUNT(DISTINCT COALESCE(NULLIF(user_id, ''), person)) AS v FROM message_counts mc WHERE mc.workspace_id = ? ${mcChFilter}`, args: [workspaceId ?? '', ...mcChArgs] }),
       client.execute({ sql: `SELECT COUNT(*) AS v FROM digests d ${where}`, args: p([]) }),
       client.execute({ sql: `SELECT period_summary, created_at FROM digests d ${where} ORDER BY d.created_at DESC LIMIT 1`, args: p([]) }),
       client.execute({ sql: `SELECT ai.id, ai.owner, ai.owner_ids AS ownerIds, ai.task, ai.deadline, ai.channel, ai.status, d.created_at AS createdAt FROM action_items ai JOIN digests d ON d.id = ai.digest_id ${where} ${chFilter} ORDER BY d.created_at DESC`, args: pch(chArgs) }),
@@ -381,7 +402,7 @@ export async function getContributionDetails(workspaceId?: string, channel?: str
 
   const [ctribRows, channelRows, aiRows, blkRows] = await Promise.all([
     client.execute({
-      sql: `SELECT mc.person, mc.message_date AS msgDate, mc.count
+      sql: `SELECT mc.user_id AS userId, mc.person, mc.message_date AS msgDate, mc.count
             FROM message_counts mc
             WHERE mc.workspace_id = ? ${channelFilter} ORDER BY mc.message_date ASC`,
       args: mcArgs,
@@ -397,7 +418,7 @@ export async function getContributionDetails(workspaceId?: string, channel?: str
       args: p,
     }),
     client.execute({
-      sql: `SELECT b.id, b.description, b.affected, b.channel, COALESCE(b.status, 'open') AS status
+      sql: `SELECT b.id, b.description, b.affected, b.affected_ids AS affectedIds, b.channel, COALESCE(b.status, 'open') AS status
             FROM blockers b JOIN digests d ON d.id = b.digest_id
             WHERE 1=1 ${wsFilter} AND (b.status IS NULL OR b.status = 'open')`,
       args: p,
@@ -418,48 +439,62 @@ export async function getContributionDetails(workspaceId?: string, channel?: str
   const personRecent: Record<string, number> = {}
   const personPrior: Record<string, number> = {}
   const personByWeek: Record<string, Record<string, number>> = {}
+  const personNameByKey: Record<string, string> = {}
+  const personIdByKey: Record<string, string> = {}
 
   for (const r of allContribs) {
+    const key = personKey(r.userId, r.person)
+    const name = String(r.person)
+    personNameByKey[key] ??= name
+    if (r.userId) personIdByKey[key] = String(r.userId)
     const wk = weekLabel(r.msgDate)
     const cnt = Number(r.count ?? 1)
     weekMap[wk] ??= {}
-    weekMap[wk][r.person] = (weekMap[wk][r.person] ?? 0) + cnt
-    personTotals[r.person] = (personTotals[r.person] ?? 0) + cnt
+    weekMap[wk][name] = (weekMap[wk][name] ?? 0) + cnt
+    personTotals[key] = (personTotals[key] ?? 0) + cnt
     const d = String(r.msgDate).slice(0, 10)
-    if (d >= cutoff14) personRecent[r.person] = (personRecent[r.person] ?? 0) + cnt
-    else if (d >= cutoff28) personPrior[r.person] = (personPrior[r.person] ?? 0) + cnt
-    personByWeek[r.person] ??= {}
-    personByWeek[r.person][wk] = (personByWeek[r.person][wk] ?? 0) + cnt
+    if (d >= cutoff14) personRecent[key] = (personRecent[key] ?? 0) + cnt
+    else if (d >= cutoff28) personPrior[key] = (personPrior[key] ?? 0) + cnt
+    personByWeek[key] ??= {}
+    personByWeek[key][wk] = (personByWeek[key][wk] ?? 0) + cnt
   }
 
   const personAI: Record<string, any[]> = {}
   const personSlackId: Record<string, string> = {}
   for (const ai of allAI) {
-    const names = (ai.owner ?? '').split(',').map((n: string) => n.trim()).filter(Boolean)
-    const ids = (ai.ownerIds ?? '').split(',').map((n: string) => n.trim()).filter(Boolean)
+    const names = splitPeople(String(ai.owner ?? ''))
+    const ids = String(ai.ownerIds ?? '').split(',').map((n: string) => n.trim()).filter(Boolean)
     names.forEach((name: string, i: number) => {
-      personAI[name] ??= []
-      personAI[name].push(ai)
-      if (ids[i] && !personSlackId[name]) personSlackId[name] = ids[i]
+      const key = personKey(ids[i], name)
+      personNameByKey[key] ??= name
+      if (ids[i]) personIdByKey[key] = ids[i]
+      personAI[key] ??= []
+      personAI[key].push(ai)
     })
   }
 
   const personBlockers: Record<string, any[]> = {}
   for (const b of allBlockers) {
-    for (const name of (b.affected ?? '').split(',').map((n: string) => n.trim()).filter(Boolean)) {
-      personBlockers[name] ??= []
-      personBlockers[name].push(b)
-    }
+    const names = splitPeople(String(b.affected ?? ''))
+    const ids = String(b.affectedIds ?? '').split(',').map((n: string) => n.trim()).filter(Boolean)
+    names.forEach((name: string, i: number) => {
+      const key = personKey(ids[i], name)
+      personNameByKey[key] ??= name
+      if (ids[i]) personIdByKey[key] = ids[i]
+      personBlockers[key] ??= []
+      personBlockers[key].push(b)
+    })
   }
 
   const contributors = Object.entries(personTotals)
-    .map(([name, total]) => ({
-      name,
+    .map(([key, total]) => ({
+      name: personNameByKey[key] ?? key,
+      userId: personIdByKey[key] ?? '',
       total,
-      recent: personRecent[name] ?? 0,
-      prior: personPrior[name] ?? 0,
-      openActionItems: (personAI[name] ?? []).length,
-      openBlockers: (personBlockers[name] ?? []).length,
+      recent: personRecent[key] ?? 0,
+      prior: personPrior[key] ?? 0,
+      openActionItems: (personAI[key] ?? []).length,
+      openBlockers: (personBlockers[key] ?? []).length,
     }))
     .sort((a, b) => b.total - a.total)
 
@@ -469,11 +504,13 @@ export async function getContributionDetails(workspaceId?: string, channel?: str
     byWeek: Array<{ date: string; count: number }>
   }> = {}
 
-  for (const { name } of contributors) {
+  for (const { name, userId } of contributors) {
+    const key = personKey(userId, name)
+    if (userId) personSlackId[name] = userId
     personDetails[name] = {
-      actionItems: personAI[name] ?? [],
-      blockers: personBlockers[name] ?? [],
-      byWeek: Object.entries(personByWeek[name] ?? {})
+      actionItems: personAI[key] ?? [],
+      blockers: personBlockers[key] ?? [],
+      byWeek: Object.entries(personByWeek[key] ?? {})
         .map(([date, count]) => ({ date, count }))
         .sort((a, b) => a.date.localeCompare(b.date)),
     }

@@ -25,6 +25,7 @@ from fetcher import SlackFetcher
 from analyzer import analyze
 from reporter import build_blocks, send_digest
 from storage import save_digest, save_message_counts
+from identity import SlackIdentityIndex
 
 
 def _fetch_pr_count(github_token: str, repos_str: str, lookback_days: int) -> int | None:
@@ -80,8 +81,9 @@ def run_digest(config: Config, workspace_id: str | None = None) -> None:
     print(f"Analyzing {total} messages with Claude ({config.model})...")
     digest = analyze(config.openrouter_api_key, channel_data, config.model)
 
-    save_message_counts(channel_data, workspace_id)
-    digest_id = save_digest(digest, config.backfill_days, total, workspace_id)
+    identities = SlackIdentityIndex.from_channel_data(channel_data)
+    save_message_counts(channel_data, workspace_id, identities)
+    digest_id = save_digest(digest, config.backfill_days, total, workspace_id, identities)
     print(f"Digest saved to database (id={digest_id})")
 
     pr_count = None

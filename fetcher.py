@@ -73,6 +73,7 @@ class SlackFetcher:
                     continue
                 entry = {
                     "user": self.resolve_user(msg.get("user", "unknown")),
+                    "user_id": msg.get("user", "unknown"),
                     "text": msg.get("text", ""),
                     "ts": msg["ts"],
                     "replies": [],
@@ -96,6 +97,7 @@ class SlackFetcher:
             return [
                 {
                     "user": self.resolve_user(m.get("user", "unknown")),
+                    "user_id": m.get("user", "unknown"),
                     "text": m.get("text", ""),
                     "ts": m.get("ts", thread_ts),
                 }
