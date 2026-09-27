@@ -1,11 +1,11 @@
 display_information:
-  name: Digest Agent
-  description: Summarizes team activity and sends a digest to managers.
+  name: Rundown
+  description: Turns team activity into a concise manager briefing.
   background_color: "#1a1a2e"
 
 features:
   bot_user:
-    display_name: Digest Agent
+    display_name: Rundown
     always_online: false
 
 oauth_config:
@@ -13,6 +13,7 @@ oauth_config:
     bot:
       - channels:history       # read public channel messages
       - channels:read          # list public channels
+      - channels:join          # join selected public channels
       - groups:history         # read private channel messages
       - groups:read            # list private channels
       - im:write               # open DMs

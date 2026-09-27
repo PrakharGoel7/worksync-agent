@@ -1,19 +1,27 @@
-# Secrets
+# Secrets and local configuration
 .env
+.env.*
+!.env.example
 *.env.local
 
-# Local DB
-digests.db
+# Local databases
+*.db
+*.db-shm
+*.db-wal
 
 # Python
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+.venv/
+.pytest_cache/
+.coverage
 
 # Next.js
 dashboard/.next/
 dashboard/node_modules/
 dashboard/tsconfig.tsbuildinfo
+npm-debug.log*
 
-# Vercel
+# Generated deployment and local-tool state
 .vercel
+.DS_Store

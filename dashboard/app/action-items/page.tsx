@@ -213,9 +213,7 @@ export default function ActionItemsPage() {
   const people = useMemo(() => {
     const s = new Set<string>()
     items.forEach(i => splitOwners(i.owner ?? '').forEach(n => s.add(n)))
-    const result = ['all', ...Array.from(s).sort()]
-    console.log('people options:', result)
-    return result
+    return ['all', ...Array.from(s).sort()]
   }, [items])
 
   const filtered = items.filter(i =>

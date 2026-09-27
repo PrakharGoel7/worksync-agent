@@ -1,10 +1,12 @@
 {
     "display_information": {
-        "name": "Demo App"
+        "name": "Rundown",
+        "description": "Turns team activity into a concise manager briefing.",
+        "background_color": "#1a1a2e"
     },
     "features": {
         "bot_user": {
-            "display_name": "Demo App",
+            "display_name": "Rundown",
             "always_online": false
         }
     },
@@ -13,6 +15,7 @@
             "bot": [
                 "channels:history",
                 "channels:read",
+                "channels:join",
                 "groups:history",
                 "groups:read",
                 "im:write",
